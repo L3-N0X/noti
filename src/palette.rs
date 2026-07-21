@@ -1,8 +1,8 @@
-use std::rc::Rc;
-use std::cell::RefCell;
-use gtk::prelude::*;
-use gtk::gdk::Key;
 use crate::app::AppState;
+use gtk::gdk::Key;
+use gtk::prelude::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub struct PaletteOverlay {
     pub container: gtk::Box,
@@ -47,6 +47,7 @@ impl PaletteOverlay {
         let commands = vec![
             "New note",
             "Close current note",
+            "Delete current note",
             "Open Markdown file…",
             "Recent notes",
             "Copy whole document",
@@ -68,7 +69,7 @@ impl PaletteOverlay {
                 .margin_start(12)
                 .margin_end(12)
                 .build();
-            
+
             let row = gtk::ListBoxRow::new();
             row.set_child(Some(&label));
             row.set_widget_name(cmd); // use name to identify command
@@ -79,7 +80,7 @@ impl PaletteOverlay {
         let listbox_clone = listbox.clone();
         entry.connect_search_changed(move |_| {
             listbox_clone.invalidate_filter();
-            
+
             // Select the first visible item
             let mut i = 0;
             while let Some(row) = listbox_clone.row_at_index(i) {
@@ -120,30 +121,28 @@ impl PaletteOverlay {
         let listbox_key = listbox.clone();
         let app_state_key = app_state.clone();
         let key_controller = gtk::EventControllerKey::new();
-        key_controller.connect_key_pressed(move |_, keyval, _, _| {
-            match keyval {
-                Key::Escape => {
-                    if let Ok(mut state) = app_state_key.try_borrow_mut() {
-                        state.hide_overlays();
-                    }
-                    glib::Propagation::Stop
+        key_controller.connect_key_pressed(move |_, keyval, _, _| match keyval {
+            Key::Escape => {
+                if let Ok(mut state) = app_state_key.try_borrow_mut() {
+                    state.hide_overlays();
                 }
-                Key::Down => {
-                    if let Some(row) = listbox_key.selected_row() {
-                        row.grab_focus();
-                    } else if let Some(row) = listbox_key.row_at_index(0) {
-                        row.grab_focus();
-                    }
-                    glib::Propagation::Stop
-                }
-                Key::Return | Key::KP_Enter => {
-                    if let Some(row) = listbox_key.selected_row() {
-                        row.activate();
-                    }
-                    glib::Propagation::Stop
-                }
-                _ => glib::Propagation::Proceed,
+                glib::Propagation::Stop
             }
+            Key::Down => {
+                if let Some(row) = listbox_key.selected_row() {
+                    row.grab_focus();
+                } else if let Some(row) = listbox_key.row_at_index(0) {
+                    row.grab_focus();
+                }
+                glib::Propagation::Stop
+            }
+            Key::Return | Key::KP_Enter => {
+                if let Some(row) = listbox_key.selected_row() {
+                    row.activate();
+                }
+                glib::Propagation::Stop
+            }
+            _ => glib::Propagation::Proceed,
         });
         entry.add_controller(key_controller);
 
@@ -152,32 +151,30 @@ impl PaletteOverlay {
         let app_state_listbox = app_state.clone();
         let listbox_clone = listbox.clone();
         let listbox_key_ctrl = gtk::EventControllerKey::new();
-        listbox_key_ctrl.connect_key_pressed(move |_, keyval, _, _| {
-            match keyval {
-                Key::Escape => {
-                    if let Ok(mut state) = app_state_listbox.try_borrow_mut() {
-                        state.hide_overlays();
-                    }
-                    glib::Propagation::Stop
+        listbox_key_ctrl.connect_key_pressed(move |_, keyval, _, _| match keyval {
+            Key::Escape => {
+                if let Ok(mut state) = app_state_listbox.try_borrow_mut() {
+                    state.hide_overlays();
                 }
-                Key::Up => {
-                    if let Some(row) = listbox_clone.selected_row() {
-                        if row.index() == 0 {
-                            entry_focus.grab_focus();
-                            return glib::Propagation::Stop;
-                        }
+                glib::Propagation::Stop
+            }
+            Key::Up => {
+                if let Some(row) = listbox_clone.selected_row() {
+                    if row.index() == 0 {
+                        entry_focus.grab_focus();
+                        return glib::Propagation::Stop;
                     }
-                    glib::Propagation::Proceed
                 }
-                Key::Return | Key::KP_Enter => glib::Propagation::Proceed,
-                _ => {
-                    if let Some(c) = keyval.to_unicode() {
-                        if !c.is_control() {
-                            entry_focus.grab_focus();
-                        }
+                glib::Propagation::Proceed
+            }
+            Key::Return | Key::KP_Enter => glib::Propagation::Proceed,
+            _ => {
+                if let Some(c) = keyval.to_unicode() {
+                    if !c.is_control() {
+                        entry_focus.grab_focus();
                     }
-                    glib::Propagation::Proceed
                 }
+                glib::Propagation::Proceed
             }
         });
         listbox.add_controller(listbox_key_ctrl);
@@ -186,9 +183,6 @@ impl PaletteOverlay {
             listbox.select_row(Some(&first_row));
         }
 
-        Self {
-            container,
-            entry,
-        }
+        Self { container, entry }
     }
 }

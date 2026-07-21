@@ -1,12 +1,12 @@
+use crate::config::Config;
 use gtk::prelude::*;
 use sourceview5::prelude::*;
-use crate::config::Config;
 
 pub fn update_editor_scheme(buffer: &sourceview5::Buffer) {
     let style_manager = adw::StyleManager::default();
     let is_dark = style_manager.is_dark();
-    let scheme_manager = sourceview5::StyleSchemeManager::new();
-    
+    let scheme_manager = sourceview5::StyleSchemeManager::default();
+
     let scheme_id = if is_dark {
         if scheme_manager.scheme("Adwaita-dark").is_some() {
             "Adwaita-dark"
@@ -24,7 +24,7 @@ pub fn update_editor_scheme(buffer: &sourceview5::Buffer) {
             "classic"
         }
     };
-    
+
     if let Some(scheme) = scheme_manager.scheme(scheme_id) {
         buffer.set_style_scheme(Some(&scheme));
     } else {
@@ -48,16 +48,7 @@ pub fn apply_styles(
             _ => style_manager.set_color_scheme(adw::ColorScheme::Default),
         }
     } else {
-        let mut scheme_set = false;
-        if let Some(settings) = gtk::Settings::default() {
-            if settings.is_gtk_application_prefer_dark_theme() {
-                style_manager.set_color_scheme(adw::ColorScheme::ForceDark);
-                scheme_set = true;
-            }
-        }
-        if !scheme_set {
-            style_manager.set_color_scheme(adw::ColorScheme::Default);
-        }
+        style_manager.set_color_scheme(adw::ColorScheme::Default);
     }
 
     // 2. Window Opacity
@@ -96,12 +87,25 @@ pub fn apply_styles(
         sourceview.style_context().remove_provider(&provider);
     }
 
-    let mut editor_css = String::from("textview, textview text {\n    background-color: transparent;\n}\n");
+    let mut editor_css =
+        String::from("textview, textview text {\n    background-color: transparent;\n}\n");
     if let Some(ref color) = config.editor.text_color {
         editor_css.push_str(&format!("textview text {{ color: {}; }}\n", color));
     }
     if let Some(ref font) = config.editor.font {
-        editor_css.push_str(&format!("textview {{ font: {}; }}\n", font));
+        let mut parts: Vec<&str> = font.split_whitespace().collect();
+        if let Some(last) = parts.last() {
+            if let Ok(parsed_size) = last.parse::<f32>() {
+                parts.pop();
+                let family = parts.join(" ");
+                editor_css.push_str(&format!(
+                    "textview {{ font-family: \"{}\"; font-size: {}pt; }}\n",
+                    family, parsed_size
+                ));
+            } else {
+                editor_css.push_str(&format!("textview {{ font-family: \"{}\"; }}\n", font));
+            }
+        }
     }
     if let Some(size) = config.editor.font_size {
         editor_css.push_str(&format!("textview {{ font-size: {}pt; }}\n", size));
@@ -109,7 +113,9 @@ pub fn apply_styles(
 
     let provider = gtk::CssProvider::new();
     provider.load_from_data(&editor_css);
-    sourceview.style_context().add_provider(&provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
+    sourceview
+        .style_context()
+        .add_provider(&provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
     *old_editor_provider = Some(provider);
 
     // 6. Global custom CSS

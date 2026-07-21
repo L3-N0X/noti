@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use gtk::prelude::*;
+use std::path::PathBuf;
 
 pub fn select_file_to_open<F>(
     parent_window: &adw::ApplicationWindow,

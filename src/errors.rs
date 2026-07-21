@@ -20,7 +20,6 @@ pub enum AppError {
     #[error("Glsl/Gtk error: {0}")]
     Glib(#[from] glib::Error),
 
-
     #[error("Operation failed: {0}")]
     Generic(String),
 }

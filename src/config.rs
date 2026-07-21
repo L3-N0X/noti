@@ -1,6 +1,6 @@
-use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
 use crate::errors::Result;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotesConfig {
@@ -224,14 +224,20 @@ impl Config {
                     warnings.push("autosave.delay_ms must be greater than 0".to_string());
                 }
             }
-            if let Some(int) = autosave.get("snapshot_interval_minutes").and_then(|v| v.as_integer()) {
+            if let Some(int) = autosave
+                .get("snapshot_interval_minutes")
+                .and_then(|v| v.as_integer())
+            {
                 if int >= 0 {
                     config.autosave.snapshot_interval_minutes = int as u64;
                 } else {
                     warnings.push("autosave.snapshot_interval_minutes must be >= 0".to_string());
                 }
             }
-            if let Some(keep) = autosave.get("keep_snapshots_days").and_then(|v| v.as_integer()) {
+            if let Some(keep) = autosave
+                .get("keep_snapshots_days")
+                .and_then(|v| v.as_integer())
+            {
                 if keep >= 0 {
                     config.autosave.keep_snapshots_days = keep as u64;
                 } else {
@@ -244,7 +250,10 @@ impl Config {
             if let Some(reopen) = behavior.get("reopen_last_note").and_then(|v| v.as_bool()) {
                 config.behavior.reopen_last_note = reopen;
             }
-            if let Some(create) = behavior.get("create_note_on_launch_if_none").and_then(|v| v.as_bool()) {
+            if let Some(create) = behavior
+                .get("create_note_on_launch_if_none")
+                .and_then(|v| v.as_bool())
+            {
                 config.behavior.create_note_on_launch_if_none = create;
             }
             if let Some(limit) = behavior.get("recent_limit").and_then(|v| v.as_integer()) {
@@ -276,7 +285,10 @@ impl Config {
             if let Some(ln) = editor.get("line_numbers").and_then(|v| v.as_bool()) {
                 config.editor.line_numbers = Some(ln);
             }
-            if let Some(mh) = editor.get("markdown_highlighting").and_then(|v| v.as_bool()) {
+            if let Some(mh) = editor
+                .get("markdown_highlighting")
+                .and_then(|v| v.as_bool())
+            {
                 config.editor.markdown_highlighting = Some(mh);
             }
             if let Some(wt) = editor.get("wrap_text").and_then(|v| v.as_bool()) {
@@ -289,21 +301,26 @@ impl Config {
                 if (0.10..=1.00).contains(&op) {
                     config.window.window_opacity = Some(op);
                 } else {
-                    warnings.push("window.window_opacity must be between 0.10 and 1.00".to_string());
+                    warnings
+                        .push("window.window_opacity must be between 0.10 and 1.00".to_string());
                 }
             } else if let Some(op) = window.get("window_opacity").and_then(|v| v.as_integer()) {
                 let op_f = op as f64;
                 if (0.10..=1.00).contains(&op_f) {
                     config.window.window_opacity = Some(op_f);
                 } else {
-                    warnings.push("window.window_opacity must be between 0.10 and 1.00".to_string());
+                    warnings
+                        .push("window.window_opacity must be between 0.10 and 1.00".to_string());
                 }
             }
             if let Some(scheme) = window.get("color_scheme").and_then(|v| v.as_str()) {
                 if ["system", "light", "dark"].contains(&scheme) {
                     config.window.color_scheme = Some(scheme.to_string());
                 } else {
-                    warnings.push(format!("window.color_scheme must be system, light, or dark. Got: {}", scheme));
+                    warnings.push(format!(
+                        "window.color_scheme must be system, light, or dark. Got: {}",
+                        scheme
+                    ));
                 }
             }
         }

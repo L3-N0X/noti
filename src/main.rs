@@ -1,29 +1,28 @@
-mod errors;
-mod config;
-mod state;
-mod recents;
-mod document;
-mod storage;
-mod snapshots;
-mod style;
+mod app;
+mod autosave;
 mod clipboard;
+mod config;
+mod document;
+mod editor;
+mod errors;
+mod history_dialog;
 mod open_dialog;
 mod palette;
 mod recent_dialog;
-mod history_dialog;
-mod editor;
-mod autosave;
-mod app;
+mod recents;
+mod snapshots;
+mod state;
+mod storage;
+mod style;
 
-use std::rc::Rc;
-use std::cell::RefCell;
-use gtk::prelude::*;
-use adw::prelude::*;
-use gtk::gdk::Key;
 use crate::app::AppState;
+use crate::history_dialog::HistoryOverlay;
 use crate::palette::PaletteOverlay;
 use crate::recent_dialog::RecentOverlay;
-use crate::history_dialog::HistoryOverlay;
+use adw::prelude::*;
+use gtk::gdk::Key;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 fn main() -> glib::ExitCode {
     let application = adw::Application::builder()
@@ -33,7 +32,8 @@ fn main() -> glib::ExitCode {
     application.connect_activate(|app| {
         // Initialize style provider for the overlays
         let overlay_css = gtk::CssProvider::new();
-        overlay_css.load_from_data(r#"
+        overlay_css.load_from_data(
+            r#"
             .palette-overlay, .recent-overlay, .history-overlay {
                 background-color: @theme_base_color;
                 box-shadow: 0 4px 16px rgba(0,0,0,0.25);
@@ -44,21 +44,22 @@ fn main() -> glib::ExitCode {
                 font-size: 0.85em;
             }
             toast, .toast {
-                background: @theme_base_color !important;
-                background-color: @theme_base_color !important;
-                background-image: none !important;
-                color: @theme_text_color !important;
-                border: 1px solid mix(@theme_fg_color, @theme_base_color, 0.12) !important;
+                background: @theme_base_color;
+                background-color: @theme_base_color;
+                background-image: none;
+                color: @theme_text_color;
+                border: 1px solid mix(@theme_fg_color, @theme_base_color, 0.12);
                 border-radius: 12px;
                 padding: 10px 20px;
                 margin-bottom: 24px;
                 box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
             }
             toast label, .toast label, toast label.heading, .toast label.heading, toast * {
-                color: @theme_text_color !important;
+                color: @theme_text_color;
                 font-weight: 500;
             }
-        "#);
+        "#,
+        );
 
         if let Some(display) = gtk::gdk::Display::default() {
             gtk::style_context_add_provider_for_display(
@@ -72,7 +73,11 @@ fn main() -> glib::ExitCode {
 
         let (width, height, maximized) = {
             let state = app_state.borrow();
-            (state.state.window_width, state.state.window_height, state.state.maximized)
+            (
+                state.state.window_width,
+                state.state.window_height,
+                state.state.maximized,
+            )
         };
 
         let window = adw::ApplicationWindow::builder()
@@ -87,14 +92,12 @@ fn main() -> glib::ExitCode {
         }
 
         let toast_overlay = adw::ToastOverlay::new();
-        let overlay = gtk::Overlay::builder()
-            .vexpand(true)
-            .hexpand(true)
-            .build();
+        let overlay = gtk::Overlay::builder().vexpand(true).hexpand(true).build();
 
         let (view, buffer) = crate::editor::create_editor();
 
-        let scroll_controller = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
+        let scroll_controller =
+            gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
         let app_state_scroll = app_state.clone();
         scroll_controller.connect_scroll(move |controller, _dx, dy| {
             let state = controller.current_event_state();
@@ -166,9 +169,21 @@ fn main() -> glib::ExitCode {
 
             let any_overlay_visible = {
                 if let Ok(state) = app_state_key.try_borrow() {
-                    let p_vis = state.palette_overlay.as_ref().map(|o| o.container.get_visible()).unwrap_or(false);
-                    let r_vis = state.recent_overlay.as_ref().map(|o| o.container.get_visible()).unwrap_or(false);
-                    let h_vis = state.history_overlay.as_ref().map(|o| o.container.get_visible()).unwrap_or(false);
+                    let p_vis = state
+                        .palette_overlay
+                        .as_ref()
+                        .map(|o| o.container.get_visible())
+                        .unwrap_or(false);
+                    let r_vis = state
+                        .recent_overlay
+                        .as_ref()
+                        .map(|o| o.container.get_visible())
+                        .unwrap_or(false);
+                    let h_vis = state
+                        .history_overlay
+                        .as_ref()
+                        .map(|o| o.container.get_visible())
+                        .unwrap_or(false);
                     p_vis || r_vis || h_vis
                 } else {
                     false
@@ -229,6 +244,9 @@ fn main() -> glib::ExitCode {
                     glib::Propagation::Stop
                 } else if keyval_lower == Key::w && !has_shift {
                     AppState::execute_command_static(app_state_key.clone(), "Close current note");
+                    glib::Propagation::Stop
+                } else if keyval_lower == Key::d && !has_shift {
+                    AppState::execute_command_static(app_state_key.clone(), "Delete current note");
                     glib::Propagation::Stop
                 } else if keyval == Key::plus || keyval == Key::equal || keyval == Key::KP_Add {
                     if let Ok(mut state) = app_state_key.try_borrow_mut() {

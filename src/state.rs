@@ -1,6 +1,6 @@
-use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
 use crate::errors::Result;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CursorState {
@@ -28,8 +28,12 @@ pub struct PersistedState {
     pub font_size: Option<f32>,
 }
 
-fn default_window_width() -> i32 { 800 }
-fn default_window_height() -> i32 { 600 }
+fn default_window_width() -> i32 {
+    800
+}
+fn default_window_height() -> i32 {
+    600
+}
 
 impl Default for PersistedState {
     fn default() -> Self {

@@ -1,14 +1,14 @@
-use std::rc::Rc;
-use std::cell::RefCell;
-use std::path::Path;
-use gtk::prelude::*;
 use crate::config::Config;
 use crate::document::Document;
-use crate::state::{PersistedState, CursorState};
+use crate::errors::{AppError, Result};
+use crate::history_dialog::HistoryOverlay;
 use crate::palette::PaletteOverlay;
 use crate::recent_dialog::RecentOverlay;
-use crate::history_dialog::HistoryOverlay;
-use crate::errors::{AppError, Result};
+use crate::state::{CursorState, PersistedState};
+use adw::prelude::*;
+use std::cell::RefCell;
+use std::path::Path;
+use std::rc::Rc;
 
 pub struct AppState {
     pub config: Config,
@@ -38,7 +38,10 @@ pub struct AppState {
 impl AppState {
     pub fn new() -> Self {
         let (mut config, config_warnings) = Config::load_or_create().unwrap_or_else(|e| {
-            (Config::default(), vec![format!("Failed to load config: {}", e)])
+            (
+                Config::default(),
+                vec![format!("Failed to load config: {}", e)],
+            )
         });
         let state = PersistedState::load_or_default();
         if let Some(fs) = state.font_size {
@@ -111,7 +114,7 @@ impl AppState {
     pub fn load_initial_note(&mut self) -> Result<()> {
         let reopen = self.config.behavior.reopen_last_note;
         let last_opened = self.state.last_opened.clone();
-        
+
         let path_to_open = if reopen { last_opened } else { None };
 
         if let Some(path) = path_to_open {
@@ -151,8 +154,11 @@ impl AppState {
         if self.document.dirty {
             let _ = self.save_current_document();
         }
-        
-        let buffer = self.buffer.as_ref().ok_or_else(|| AppError::Generic("No buffer".to_string()))?;
+
+        let buffer = self
+            .buffer
+            .as_ref()
+            .ok_or_else(|| AppError::Generic("No buffer".to_string()))?;
         if let Some(ref current_path) = self.document.path {
             let (start, end) = buffer.bounds();
             let content = buffer.text(&start, &end, false).to_string();
@@ -168,10 +174,10 @@ impl AppState {
         buffer.set_text("");
         self.is_loading = false;
         self.document = Document::new(None);
-        
+
         let highlighting = self.config.editor.markdown_highlighting.unwrap_or(true);
         crate::editor::configure_highlighting(buffer, None, highlighting);
-        
+
         self.show_message("New note created");
         if let Some(ref sv) = self.sourceview {
             sv.grab_focus();
@@ -184,7 +190,10 @@ impl AppState {
             let _ = self.save_current_document();
         }
 
-        let buffer = self.buffer.as_ref().ok_or_else(|| AppError::Generic("No buffer".to_string()))?;
+        let buffer = self
+            .buffer
+            .as_ref()
+            .ok_or_else(|| AppError::Generic("No buffer".to_string()))?;
         if let Some(ref current_path) = self.document.path {
             let (start, end) = buffer.bounds();
             let content = buffer.text(&start, &end, false).to_string();
@@ -212,7 +221,11 @@ impl AppState {
         crate::editor::configure_highlighting(buffer, Some(path), highlighting);
 
         self.state.last_opened = Some(path.to_path_buf());
-        crate::recents::add_recent(&mut self.state, path.to_path_buf(), self.config.behavior.recent_limit);
+        crate::recents::add_recent(
+            &mut self.state,
+            path.to_path_buf(),
+            self.config.behavior.recent_limit,
+        );
         let _ = self.state.save();
 
         let start_iter = buffer.start_iter();
@@ -226,7 +239,10 @@ impl AppState {
     }
 
     pub fn restore_snapshot(&mut self, snapshot_path: &Path) -> Result<()> {
-        let buffer = self.buffer.as_ref().ok_or_else(|| AppError::Generic("No buffer".to_string()))?;
+        let buffer = self
+            .buffer
+            .as_ref()
+            .ok_or_else(|| AppError::Generic("No buffer".to_string()))?;
         let note_path = self.document.path.as_ref().ok_or_else(|| {
             AppError::Generic("Cannot restore snapshot for untitled note".to_string())
         })?;
@@ -252,7 +268,10 @@ impl AppState {
     }
 
     pub fn save_current_document(&mut self) -> Result<()> {
-        let buffer = self.buffer.as_ref().ok_or_else(|| AppError::Generic("No buffer".to_string()))?;
+        let buffer = self
+            .buffer
+            .as_ref()
+            .ok_or_else(|| AppError::Generic("No buffer".to_string()))?;
         let (start, end) = buffer.bounds();
         let content = buffer.text(&start, &end, false).to_string();
         let hash = Document::compute_hash(&content);
@@ -278,7 +297,9 @@ impl AppState {
 
         if path.exists() {
             if let Ok(metadata) = path.metadata() {
-                if let (Some(last_mod), Ok(current_mod)) = (self.document.last_modified, metadata.modified()) {
+                if let (Some(last_mod), Ok(current_mod)) =
+                    (self.document.last_modified, metadata.modified())
+                {
                     if current_mod > last_mod {
                         if let Ok(disk_content) = std::fs::read_to_string(&path) {
                             let _ = crate::snapshots::create_snapshot_if_needed(
@@ -302,7 +323,11 @@ impl AppState {
         }
 
         self.state.last_opened = Some(path.clone());
-        crate::recents::add_recent(&mut self.state, path.clone(), self.config.behavior.recent_limit);
+        crate::recents::add_recent(
+            &mut self.state,
+            path.clone(),
+            self.config.behavior.recent_limit,
+        );
         let _ = self.state.save();
 
         let _ = crate::snapshots::create_snapshot_if_needed(
@@ -335,7 +360,11 @@ impl AppState {
 
         if let Some(ref buffer) = self.buffer {
             let highlighting = self.config.editor.markdown_highlighting.unwrap_or(true);
-            crate::editor::configure_highlighting(buffer, self.document.path.as_deref(), highlighting);
+            crate::editor::configure_highlighting(
+                buffer,
+                self.document.path.as_deref(),
+                highlighting,
+            );
         }
 
         Ok(())
@@ -391,7 +420,11 @@ impl AppState {
         if let Some(size) = self.config.editor.font_size {
             return size;
         }
-        if let Some(size) = self.config.editor.font.as_ref()
+        if let Some(size) = self
+            .config
+            .editor
+            .font
+            .as_ref()
             .and_then(|f| f.split_whitespace().last())
             .and_then(|s| s.parse::<f32>().ok())
         {
@@ -479,8 +512,6 @@ impl AppState {
         self.show_message("No history available for unsaved note");
     }
 
-
-
     pub fn close_current_note(&mut self) -> Result<()> {
         self.last_cycle_time = None;
         self.cycle_list.clear();
@@ -493,7 +524,10 @@ impl AppState {
         // 2. Find the most recent note other than the current one
         crate::recents::clean_recents(&mut self.state);
 
-        let target_path = self.state.recent.iter()
+        let target_path = self
+            .state
+            .recent
+            .iter()
             .map(|entry| entry.path.clone())
             .find(|path| {
                 if let Some(ref curr) = current_path {
@@ -519,10 +553,113 @@ impl AppState {
         Ok(())
     }
 
+    pub fn perform_delete(&mut self) -> Result<()> {
+        self.last_cycle_time = None;
+        self.cycle_list.clear();
+        self.document.dirty = false; // Prevent saving the deleted file or auto-saving on transition
+
+        // 1. Get current path
+        let current_path = self.document.path.clone();
+
+        // 2. Delete the file if it exists
+        if let Some(ref path) = current_path {
+            if path.exists() {
+                std::fs::remove_file(path)?;
+            }
+
+            // Clean from last_opened if matches
+            if let Some(ref last) = self.state.last_opened {
+                let last_canon = last.canonicalize().unwrap_or_else(|_| last.clone());
+                let curr_canon = path.canonicalize().unwrap_or_else(|_| path.clone());
+                if last_canon == curr_canon {
+                    self.state.last_opened = None;
+                }
+            }
+        }
+
+        // 3. Clean recents
+        crate::recents::clean_recents(&mut self.state);
+
+        // 4. Find the most recent note other than the deleted one
+        let target_path = self
+            .state
+            .recent
+            .iter()
+            .map(|entry| entry.path.clone())
+            .find(|path| {
+                if let Some(ref curr) = current_path {
+                    let p_canon = path.canonicalize().unwrap_or_else(|_| path.clone());
+                    let curr_canon = curr.canonicalize().unwrap_or_else(|_| curr.clone());
+                    p_canon != curr_canon
+                } else {
+                    true
+                }
+            });
+
+        // 5. Open that note, or if none exists, create a new empty/untitled note
+        if let Some(path) = target_path {
+            self.open_note_path(&path)?;
+            self.show_message("Note deleted");
+        } else {
+            self.new_note()?;
+            self.state.last_opened = None;
+            let _ = self.state.save();
+            self.show_message("Note deleted");
+        }
+
+        Ok(())
+    }
+
+    pub fn delete_current_note(app_state: Rc<RefCell<AppState>>) {
+        let (window, has_path, filename) = {
+            let state = app_state.borrow();
+            let has_path = state.document.path.is_some();
+            let filename = state
+                .document
+                .path
+                .as_ref()
+                .and_then(|p| p.file_name())
+                .and_then(|f| f.to_str())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| "Untitled Note".to_string());
+            (state.window.clone(), has_path, filename)
+        };
+
+        let heading = format!("Delete \"{}\"?", filename);
+        let body = if has_path {
+            "Are you sure you want to delete this note? The file will be permanently removed from disk."
+        } else {
+            "Are you sure you want to discard this unsaved note? All contents will be lost."
+        };
+
+        let dialog = adw::AlertDialog::builder()
+            .heading(&heading)
+            .body(body)
+            .build();
+
+        dialog.add_response("cancel", "Cancel");
+        dialog.add_response("delete", "Delete");
+        dialog.set_response_appearance("delete", adw::ResponseAppearance::Destructive);
+        dialog.set_default_response(Some("cancel"));
+        dialog.set_close_response("cancel");
+
+        let app_state_cb = app_state.clone();
+        dialog.choose(window.as_ref(), gio::Cancellable::NONE, move |response| {
+            if response == "delete" {
+                if let Ok(mut state) = app_state_cb.try_borrow_mut() {
+                    if let Err(e) = state.perform_delete() {
+                        state.show_error(&format!("Failed to delete note: {}", e));
+                    }
+                }
+            }
+        });
+    }
+
     pub fn cycle_recent_notes(&mut self, forward: bool) -> Result<()> {
         let now = std::time::Instant::now();
         let is_session_active = if let Some(last_time) = self.last_cycle_time {
-            now.duration_since(last_time) < std::time::Duration::from_millis(1500) && !self.cycle_list.is_empty()
+            now.duration_since(last_time) < std::time::Duration::from_millis(1500)
+                && !self.cycle_list.is_empty()
         } else {
             false
         };
@@ -530,8 +667,9 @@ impl AppState {
         if !is_session_active {
             // Start a new session
             crate::recents::clean_recents(&mut self.state);
-            let mut list: Vec<std::path::PathBuf> = self.state.recent.iter().map(|e| e.path.clone()).collect();
-            
+            let mut list: Vec<std::path::PathBuf> =
+                self.state.recent.iter().map(|e| e.path.clone()).collect();
+
             // If the current note is dirty, save it first, which might add it to recents
             if self.document.dirty {
                 let _ = self.save_current_document();
@@ -605,6 +743,9 @@ impl AppState {
                     }
                 }
             }
+            "Delete current note" => {
+                Self::delete_current_note(app_state);
+            }
             "Open Markdown file…" => {
                 Self::trigger_open_dialog(app_state);
             }
@@ -634,9 +775,7 @@ impl AppState {
                 };
                 if let Some(p) = path {
                     if let Some(parent) = p.parent() {
-                        let _ = std::process::Command::new("xdg-open")
-                            .arg(parent)
-                            .spawn();
+                        let _ = std::process::Command::new("xdg-open").arg(parent).spawn();
                     }
                 } else {
                     if let Ok(state) = app_state.try_borrow() {
@@ -665,9 +804,16 @@ impl AppState {
                     let enabled = !state.config.editor.markdown_highlighting.unwrap_or(true);
                     state.config.editor.markdown_highlighting = Some(enabled);
                     if let Some(ref buffer) = state.buffer {
-                        crate::editor::configure_highlighting(buffer, state.document.path.as_deref(), enabled);
+                        crate::editor::configure_highlighting(
+                            buffer,
+                            state.document.path.as_deref(),
+                            enabled,
+                        );
                     }
-                    state.show_message(&format!("Markdown highlighting: {}", if enabled { "On" } else { "Off" }));
+                    state.show_message(&format!(
+                        "Markdown highlighting: {}",
+                        if enabled { "On" } else { "Off" }
+                    ));
                 }
             }
             "Toggle line wrapping" => {
@@ -675,9 +821,16 @@ impl AppState {
                     let enabled = !state.config.editor.wrap_text.unwrap_or(true);
                     state.config.editor.wrap_text = Some(enabled);
                     if let Some(ref view) = state.sourceview {
-                        view.set_wrap_mode(if enabled { gtk::WrapMode::Word } else { gtk::WrapMode::None });
+                        view.set_wrap_mode(if enabled {
+                            gtk::WrapMode::Word
+                        } else {
+                            gtk::WrapMode::None
+                        });
                     }
-                    state.show_message(&format!("Line wrapping: {}", if enabled { "On" } else { "Off" }));
+                    state.show_message(&format!(
+                        "Line wrapping: {}",
+                        if enabled { "On" } else { "Off" }
+                    ));
                 }
             }
             "Quit" => {
