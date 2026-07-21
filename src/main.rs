@@ -48,7 +48,6 @@ fn main() -> glib::ExitCode {
                 background-color: @theme_base_color;
                 background-image: none;
                 color: @theme_text_color;
-                border: 1px solid mix(@theme_fg_color, @theme_base_color, 0.12);
                 border-radius: 12px;
                 padding: 10px 20px;
                 margin-bottom: 24px;
