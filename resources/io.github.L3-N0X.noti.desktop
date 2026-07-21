@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=noti
+Comment=Minimal, keyboard-first Markdown note editor
+Exec=noti
+Icon=io.github.L3-N0X.noti
+Type=Application
+Terminal=false
+Categories=Office;Utility;TextEditor;
+MimeType=text/markdown;text/plain;
+StartupNotify=true
+StartupWMClass=io.github.L3-N0X.noti

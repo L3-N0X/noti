@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.L3-N0X.noti</id>
+  <name>noti</name>
+  <summary>Minimal, keyboard-first Markdown note editor</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>
+      noti is a keyboard-first Markdown note editor designed for Linux and Hyprland.
+      It launches instantly into an empty text view and autosaves automatically as you type.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.L3-N0X.noti.desktop</launchable>
+</component>

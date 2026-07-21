@@ -1,0 +1,21 @@
+[package]
+name = "noti"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+gtk = { package = "gtk4", version = "0.10" }
+adw = { package = "libadwaita", version = "0.8", features = ["v1_8"] }
+sourceview5 = "0.10"
+glib = "0.21"
+gio = "0.21"
+
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+xdg = "3"
+
+chrono = { version = "0.4", features = ["serde"] }
+sha2 = "0.10"
+anyhow = "1"
+thiserror = "2"
+fuzzy-matcher = "0.3"
