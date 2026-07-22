@@ -1,0 +1,150 @@
+# Releasing noti
+
+This document describes how to cut a new release of `noti` and publish it to
+GitHub Releases and the AUR.
+
+## Overview
+
+Releases are driven by **git tags**. Pushing a tag that matches `v*` triggers the
+[`Release` workflow](.github/workflows/release.yml), which:
+
+1. Builds `noti` in release mode inside an Arch Linux container
+   (needed because `noti` requires **libadwaita ≥ 1.8**, which stable distros lack).
+2. Packages a `noti-<version>-x86_64-linux.tar.gz` archive (prebuilt binary +
+   resources + `Makefile` + `LICENSE`) plus a `.sha256` checksum.
+3. Creates a GitHub Release with auto-generated notes and uploads those assets.
+4. Optionally pushes an updated `PKGBUILD`/`.SRCINFO` to the `noti-notes` AUR repo
+   (only if the `AUR_SSH_PRIVATE_KEY` secret is configured — see below).
+
+The versioned source tarball GitHub generates for every tag
+(`.../archive/refs/tags/v<version>.tar.gz`) is what the AUR package builds from.
+
+## Cutting a release
+
+1. **Bump the version** in `Cargo.toml` (the `version` field). Keep it in sync
+   with `Cargo.lock`:
+
+   ```bash
+   # edit Cargo.toml -> version = "X.Y.Z"
+   cargo update -p noti        # refreshes Cargo.lock's version entry
+   ```
+
+2. **Commit** the version bump:
+
+   ```bash
+   git add Cargo.toml Cargo.lock
+   git commit -m "🔖 Release vX.Y.Z"
+   git push
+   ```
+
+3. **Tag and push** the tag:
+
+   ```bash
+   git tag vX.Y.Z
+   git push origin vX.Y.Z
+   ```
+
+4. Watch the workflow: `gh run watch` (or the Actions tab). When it finishes,
+   the release and its assets are live at
+   `https://github.com/L3-N0X/noti/releases/tag/vX.Y.Z`.
+
+> Tags are the source of truth. If a release build fails, delete the tag
+> (`git push --delete origin vX.Y.Z` and `git tag -d vX.Y.Z`), fix the issue,
+> and re-tag.
+
+## Publishing to the AUR
+
+The AUR packages live in separate git repositories (mirroring the layout under
+`~/coding/typescript/aur/`):
+
+- **`noti-notes`** — builds from the latest tagged release. Bump this on every release.
+- **`noti-notes-git`** — builds from the latest `main` commit. Only needs an update
+  when its `PKGBUILD` changes (its version is computed at build time).
+
+The package name is `noti-notes` because the AUR name `noti` is taken by an
+unrelated project. The installed binary is still `noti`, so the package declares
+`conflicts=('noti')`.
+
+### First-time publish (creating the AUR repos)
+
+The `noti-notes` / `noti-notes-git` repos do not exist on the AUR yet. Create them
+**after the first GitHub release exists** (so the source tarball is available):
+
+```bash
+cd ~/coding/typescript/aur/noti-notes
+
+# Refresh the checksum from the now-published source tarball:
+updpkgsums
+makepkg --printsrcinfo > .SRCINFO
+
+# Sanity-check that it builds:
+makepkg -f
+
+# Initialise and push the new AUR repo:
+git init
+git remote add origin ssh://aur@aur.archlinux.org/noti-notes.git
+git add PKGBUILD .SRCINFO
+git commit -m "Initial import: noti-notes X.Y.Z"
+git push --set-upstream origin master
+```
+
+Repeat for `noti-notes-git` (its `sha256sums=('SKIP')`, so no `updpkgsums` needed):
+
+```bash
+cd ~/coding/typescript/aur/noti-notes-git
+makepkg --printsrcinfo > .SRCINFO
+git init
+git remote add origin ssh://aur@aur.archlinux.org/noti-notes-git.git
+git add PKGBUILD .SRCINFO
+git commit -m "Initial import: noti-notes-git"
+git push --set-upstream origin master
+```
+
+### Updating `noti-notes` on each subsequent release
+
+Manually:
+
+```bash
+cd ~/coding/typescript/aur/noti-notes
+sed -i 's/^pkgver=.*/pkgver=X.Y.Z/' PKGBUILD
+sed -i 's/^pkgrel=.*/pkgrel=1/'     PKGBUILD
+updpkgsums                          # fetches the release tarball, fills sha256sums
+makepkg --printsrcinfo > .SRCINFO
+makepkg -f                          # optional: verify it builds
+git commit -am "Update to X.Y.Z"
+git push
+```
+
+### Automating the AUR update from CI (optional)
+
+The release workflow already contains a `publish-aur` job that performs the update
+above automatically. It is **skipped unless** the `AUR_SSH_PRIVATE_KEY` repository
+secret is present. To enable it:
+
+1. Generate a dedicated SSH key (do **not** reuse a personal key):
+
+   ```bash
+   ssh-keygen -t ed25519 -C "aur-ci@noti" -f ~/.ssh/noti_aur_ci
+   ```
+
+2. Add the **public** key (`~/.ssh/noti_aur_ci.pub`) to your AUR account under
+   *My Account → SSH Public Key* at <https://aur.archlinux.org>.
+
+3. Add the **private** key as a GitHub Actions secret:
+
+   ```bash
+   gh secret set AUR_SSH_PRIVATE_KEY < ~/.ssh/noti_aur_ci
+   ```
+
+Once set, every `v*` tag will bump and push `noti-notes` to the AUR automatically.
+The `noti-notes-git` package is intentionally left out of automation — it rebuilds
+from `main` on the user's machine and only needs manual attention if its build
+recipe changes.
+
+## Version-numbering notes
+
+- `noti-notes` `pkgver` mirrors the crate/tag version (`X.Y.Z`).
+- `noti-notes-git` `pkgver` is generated by `git describe` at build time; the value
+  committed in its `PKGBUILD` is only a placeholder.
+- Bump `pkgrel` (not `pkgver`) if you change only the packaging without a new
+  upstream version.

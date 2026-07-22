@@ -47,16 +47,64 @@ By pressing `Ctrl+P`, you can access additional actions and editor settings:
 
 ## Installation
 
-### Dependencies
-Before building `noti`, make sure you have the required libraries and toolchain installed:
+> **Note:** `noti` depends on **libadwaita ≥ 1.8**, which currently ships only on
+> rolling-release distributions (Arch, Fedora Rawhide, openSUSE Tumbleweed, …).
+> On older/stable distributions you will need to update these libraries yourself.
+>
+> The AUR name `noti` was already taken by an unrelated project, so this app is
+> published as **`noti-notes`**. The installed command is still `noti`.
+
+### Option A: Arch Linux via the AUR (recommended)
+
+Install with your favourite AUR helper:
+
+```bash
+paru -S noti-notes      # latest tagged release
+# or
+yay -S noti-notes
+```
+
+Prefer to track the latest commit? Use the `-git` package instead:
+
+```bash
+paru -S noti-notes-git
+```
+
+> Both packages install `/usr/bin/noti` and therefore conflict with the
+> unrelated `noti` AUR package (a process monitor). You can only have one installed.
+
+Uninstall with `sudo pacman -R noti-notes`.
+
+### Option B: Prebuilt binary from GitHub Releases
+
+Each release on the [Releases page](https://github.com/L3-N0X/noti/releases)
+ships a `noti-<version>-x86_64-linux.tar.gz` archive (built on a rolling-release
+distro, so it needs an up-to-date GTK 4 / libadwaita stack):
+
+```bash
+# Download and verify (replace <version>)
+curl -LO https://github.com/L3-N0X/noti/releases/download/v<version>/noti-<version>-x86_64-linux.tar.gz
+curl -LO https://github.com/L3-N0X/noti/releases/download/v<version>/noti-<version>-x86_64-linux.tar.gz.sha256
+sha256sum -c noti-<version>-x86_64-linux.tar.gz.sha256
+
+# Extract and install (uses the bundled prebuilt binary — no rebuild needed)
+tar -xzf noti-<version>-x86_64-linux.tar.gz
+cd noti-<version>-x86_64-linux
+sudo make install                 # or: make PREFIX=~/.local install
+```
+
+### Dependencies (for building from source)
+
+To build `noti` yourself, make sure you have the required libraries and toolchain installed:
 *   GTK 4 (`gtk4`)
-*   libadwaita (`libadwaita`)
+*   libadwaita ≥ 1.8 (`libadwaita`)
 *   gtksourceview5 (`gtksourceview5`)
 *   Rust / Cargo (`cargo`)
 *   Make (`make`, if installing via Makefile)
 
-### Option A: Universal Installation (Makefile)
-This is the recommended installation method for most Linux distributions.
+### Option C: Build from source (Makefile)
+
+Works on most Linux distributions that provide the dependencies above.
 
 1. **Build the application:**
    ```bash
@@ -79,19 +127,15 @@ This is the recommended installation method for most Linux distributions.
    sudo make uninstall  # Or: make PREFIX=~/.local uninstall
    ```
 
-### Option B: Arch Linux (PKGBUILD)
-If you are running Arch Linux, Manjaro, or EndeavourOS, you can build a native package from your local files:
+### Option D: Arch Linux (local PKGBUILD)
 
-1. **Build and install:**
-   ```bash
-   makepkg -si --noprepare
-   ```
-   *The `--noprepare` flag ensures the package builder uses your local workspace files rather than fetching the remote repository.*
+If you have the repository checked out, you can build a native package directly
+from the tagged sources using the bundled `PKGBUILD`:
 
-2. **Uninstall:**
-   ```bash
-   sudo pacman -R noti
-   ```
+```bash
+makepkg -si
+sudo pacman -R noti-notes   # to uninstall
+```
 
 ## Configuration
 
