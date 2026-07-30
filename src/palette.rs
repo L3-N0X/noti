@@ -46,6 +46,7 @@ impl PaletteOverlay {
 
         let commands = vec![
             "New note",
+            "Save now",
             "Close current note",
             "Delete current note",
             "Open Markdown file…",

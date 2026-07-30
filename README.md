@@ -9,6 +9,7 @@
 - **Autosave**: Crash-safe autosave with atomic writes and debounce.
 - **Auto-naming**: Notes are named `YYYY-MM-DD_HH-MM-SS-first-three-words.md`.
 - **Revision History**: Snapshots are taken periodically and are easy to restore.
+- **Open with…**: Open Markdown or text files from your file manager (or the command line) and edit them in place.
 - **Keyboard-first**: Command palette and recent note popovers via hotkeys.
 - **Theme support**: Uses your GTK theme exactly, with optional TOML config overrides for transparency, fonts, colors, and padding.
 
@@ -20,6 +21,7 @@
 | `Ctrl+R` | Open recent notes list |
 | `Ctrl+O` | Open note via file chooser |
 | `Ctrl+N` | Create a new note |
+| `Ctrl+S` | Save immediately (autosave still runs on its own) |
 | `Ctrl+W` | Close the current note |
 | `Ctrl+Shift+C` | Copy the entire note to clipboard |
 | `Ctrl+C` | Copy active text selection |
@@ -33,6 +35,7 @@
 By pressing `Ctrl+P`, you can access additional actions and editor settings:
 
 - **New note**: Create a new blank note.
+- **Save now**: Write the current file to disk immediately.
 - **Close current note**: Close the active note.
 - **Open Markdown file…**: Open any markdown file via file browser.
 - **Recent notes**: Show the recent notes list overlay.
@@ -44,6 +47,33 @@ By pressing `Ctrl+P`, you can access additional actions and editor settings:
 - **Toggle Markdown highlighting**: Turn syntax highlighting on or off.
 - **Toggle line wrapping**: Turn line wrapping on or off.
 - **Quit**: Save and exit the application.
+
+## Opening existing files ("Open with…")
+
+`noti` registers itself for `text/markdown` and `text/plain`, so it shows up in
+the "Open with" menu of your file manager. You can also pass a path directly:
+
+```bash
+noti ~/projects/README.md
+noti notes/todo.md          # the file is created on the first edit
+```
+
+Files opened this way are **edited in place**: every autosave writes straight
+back to the original path, so `noti` behaves like a plain text editor for them.
+Because those files are not part of your notes folder, the note-management
+features are switched off for them:
+
+- no revision snapshots and no revision history (`Show revision history` says so)
+- no entry in the recent list, and the next plain `noti` launch reopens your last
+  *note*, not the external file
+- `Delete current note` (`Ctrl+D`) is disabled
+
+Everything else works as usual — autosave, `Ctrl+S`, highlighting, and the
+command palette. The window title shows the file name while such a file is open.
+Opening a note (`Ctrl+O`, `Ctrl+R`, `Ctrl+N`, `Alt+Left/Right`) leaves this mode.
+
+`noti` uses a single window: opening a file while `noti` is already running
+loads it into the existing window instead of starting a second instance.
 
 ## Installation
 

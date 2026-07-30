@@ -7,6 +7,10 @@ pub struct Document {
     pub dirty: bool,
     pub last_saved_hash: Option<[u8; 32]>,
     pub last_modified: Option<std::time::SystemTime>,
+    /// True when the file was handed to noti from outside ("Open with…" or a
+    /// path on the command line). Such files are edited in place: snapshots,
+    /// revision history, recents tracking and deletion are disabled for them.
+    pub external: bool,
 }
 
 impl Document {
@@ -16,6 +20,14 @@ impl Document {
             dirty: false,
             last_saved_hash: None,
             last_modified: None,
+            external: false,
+        }
+    }
+
+    pub fn new_external(path: PathBuf) -> Self {
+        Self {
+            external: true,
+            ..Self::new(Some(path))
         }
     }
 

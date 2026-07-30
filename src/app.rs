@@ -111,7 +111,17 @@ impl AppState {
         let _ = crate::snapshots::prune_old_snapshots(self.config.autosave.keep_snapshots_days);
     }
 
-    pub fn load_initial_note(&mut self) -> Result<()> {
+    pub fn load_initial_note(&mut self, initial_file: Option<std::path::PathBuf>) -> Result<()> {
+        if let Some(path) = initial_file {
+            match self.open_external_path(&path) {
+                Ok(()) => return Ok(()),
+                Err(e) => {
+                    self.show_error(&format!("Failed to open {}: {}", path.display(), e));
+                    // Fall through to the regular startup behaviour.
+                }
+            }
+        }
+
         let reopen = self.config.behavior.reopen_last_note;
         let last_opened = self.state.last_opened.clone();
 
@@ -155,28 +165,21 @@ impl AppState {
             let _ = self.save_current_document();
         }
 
+        self.snapshot_current_document();
+
         let buffer = self
             .buffer
-            .as_ref()
+            .clone()
             .ok_or_else(|| AppError::Generic("No buffer".to_string()))?;
-        if let Some(ref current_path) = self.document.path {
-            let (start, end) = buffer.bounds();
-            let content = buffer.text(&start, &end, false).to_string();
-            let _ = crate::snapshots::create_snapshot_if_needed(
-                current_path,
-                &content,
-                self.config.autosave.snapshot_interval_minutes,
-                true,
-            );
-        }
 
         self.is_loading = true;
         buffer.set_text("");
         self.is_loading = false;
         self.document = Document::new(None);
+        self.update_window_title();
 
         let highlighting = self.config.editor.markdown_highlighting.unwrap_or(true);
-        crate::editor::configure_highlighting(buffer, None, highlighting);
+        crate::editor::configure_highlighting(&buffer, None, highlighting);
 
         self.show_message("New note created");
         if let Some(ref sv) = self.sourceview {
@@ -186,15 +189,103 @@ impl AppState {
     }
 
     pub fn open_note_path(&mut self, path: &Path) -> Result<()> {
+        self.open_path(path, false)
+    }
+
+    /// Opens a file that was handed to noti from the outside ("Open with…" or a
+    /// command-line argument). The file is edited in place, and none of the
+    /// note-management features (snapshots, history, recents) touch it.
+    pub fn open_external_path(&mut self, path: &Path) -> Result<()> {
+        self.open_path(path, true)
+    }
+
+    fn open_path(&mut self, path: &Path, external: bool) -> Result<()> {
         if self.document.dirty {
             let _ = self.save_current_document();
         }
+        self.snapshot_current_document();
 
         let buffer = self
             .buffer
-            .as_ref()
+            .clone()
             .ok_or_else(|| AppError::Generic("No buffer".to_string()))?;
-        if let Some(ref current_path) = self.document.path {
+
+        // An external path may not exist yet (`noti notes/todo.md`); start from
+        // an empty buffer and create the file on the first save.
+        let exists = path.exists();
+        if exists && !path.is_file() {
+            return Err(AppError::Generic(format!(
+                "{} is not a file",
+                path.display()
+            )));
+        }
+        let content = if exists {
+            std::fs::read_to_string(path)?
+        } else if external {
+            String::new()
+        } else {
+            return Err(AppError::Generic(format!(
+                "{} does not exist",
+                path.display()
+            )));
+        };
+
+        self.is_loading = true;
+        buffer.set_text(&content);
+        self.is_loading = false;
+
+        let mut doc = if external {
+            Document::new_external(path.to_path_buf())
+        } else {
+            Document::new(Some(path.to_path_buf()))
+        };
+        if exists {
+            doc.last_saved_hash = Some(Document::compute_hash(&content));
+            if let Ok(meta) = path.metadata() {
+                doc.last_modified = meta.modified().ok();
+            }
+        }
+        self.document = doc;
+
+        let highlighting = self.config.editor.markdown_highlighting.unwrap_or(true);
+        crate::editor::configure_highlighting(&buffer, Some(path), highlighting);
+
+        if !external {
+            self.state.last_opened = Some(path.to_path_buf());
+            crate::recents::add_recent(
+                &mut self.state,
+                path.to_path_buf(),
+                self.config.behavior.recent_limit,
+            );
+            let _ = self.state.save();
+        }
+
+        let start_iter = buffer.start_iter();
+        buffer.place_cursor(&start_iter);
+
+        self.update_window_title();
+
+        if let Some(ref sv) = self.sourceview {
+            sv.grab_focus();
+        }
+
+        if external {
+            self.show_message(&format!(
+                "Editing {} in place — backups and history are off",
+                Self::display_name(path)
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Snapshots the document currently held in the buffer before it is
+    /// replaced. Externally opened files are never snapshotted.
+    fn snapshot_current_document(&self) {
+        if self.document.external {
+            return;
+        }
+        if let (Some(buffer), Some(current_path)) = (&self.buffer, &self.document.path) {
             let (start, end) = buffer.bounds();
             let content = buffer.text(&start, &end, false).to_string();
             let _ = crate::snapshots::create_snapshot_if_needed(
@@ -204,38 +295,24 @@ impl AppState {
                 true,
             );
         }
+    }
 
-        let content = std::fs::read_to_string(path)?;
-        self.is_loading = true;
-        buffer.set_text(&content);
-        self.is_loading = false;
+    fn display_name(path: &Path) -> String {
+        path.file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| path.display().to_string())
+    }
 
-        let mut doc = Document::new(Some(path.to_path_buf()));
-        doc.last_saved_hash = Some(Document::compute_hash(&content));
-        if let Ok(meta) = path.metadata() {
-            doc.last_modified = meta.modified().ok();
+    pub fn update_window_title(&self) {
+        if let Some(ref win) = self.window {
+            if self.document.external {
+                if let Some(ref path) = self.document.path {
+                    win.set_title(Some(&format!("{} — noti", Self::display_name(path))));
+                    return;
+                }
+            }
+            win.set_title(Some("noti"));
         }
-        self.document = doc;
-
-        let highlighting = self.config.editor.markdown_highlighting.unwrap_or(true);
-        crate::editor::configure_highlighting(buffer, Some(path), highlighting);
-
-        self.state.last_opened = Some(path.to_path_buf());
-        crate::recents::add_recent(
-            &mut self.state,
-            path.to_path_buf(),
-            self.config.behavior.recent_limit,
-        );
-        let _ = self.state.save();
-
-        let start_iter = buffer.start_iter();
-        buffer.place_cursor(&start_iter);
-
-        if let Some(ref sv) = self.sourceview {
-            sv.grab_focus();
-        }
-
-        Ok(())
     }
 
     pub fn restore_snapshot(&mut self, snapshot_path: &Path) -> Result<()> {
@@ -295,7 +372,9 @@ impl AppState {
             }
         };
 
-        if path.exists() {
+        let external = self.document.external;
+
+        if !external && path.exists() {
             if let Ok(metadata) = path.metadata() {
                 if let (Some(last_mod), Ok(current_mod)) =
                     (self.document.last_modified, metadata.modified())
@@ -320,6 +399,12 @@ impl AppState {
         self.document.last_saved_hash = Some(hash);
         if let Ok(metadata) = path.metadata() {
             self.document.last_modified = metadata.modified().ok();
+        }
+
+        if external {
+            // Externally opened files are edited in place only: no recents
+            // entry, no "reopen last note" hijacking, no revision snapshots.
+            return Ok(());
         }
 
         self.state.last_opened = Some(path.clone());
@@ -401,7 +486,11 @@ impl AppState {
             self.state.window_height = win.height();
         }
 
-        if let (Some(buffer), Some(_path)) = (&self.buffer, &self.document.path) {
+        // The stored cursor belongs to `last_opened`, which an externally
+        // opened file never becomes — leave it untouched in that case.
+        if let (Some(buffer), Some(_path), false) =
+            (&self.buffer, &self.document.path, self.document.external)
+        {
             if let Some(mark) = buffer.mark("insert") {
                 let iter = buffer.iter_at_mark(&mark);
                 self.state.cursor = Some(CursorState {
@@ -494,6 +583,10 @@ impl AppState {
 
     pub fn show_history_overlay(&mut self) {
         self.hide_overlays();
+        if self.document.external {
+            self.show_message("Revision history is disabled for externally opened files");
+            return;
+        }
         if let Some(ref path) = self.document.path {
             if let Ok(snapshots) = crate::snapshots::get_snapshots_for_note(path) {
                 if snapshots.is_empty() {
@@ -611,6 +704,14 @@ impl AppState {
     }
 
     pub fn delete_current_note(app_state: Rc<RefCell<AppState>>) {
+        {
+            let state = app_state.borrow();
+            if state.document.external {
+                state.show_message("Delete is disabled for externally opened files");
+                return;
+            }
+        }
+
         let (window, has_path, filename) = {
             let state = app_state.borrow();
             let has_path = state.document.path.is_some();
@@ -733,6 +834,25 @@ impl AppState {
                 if let Ok(mut state) = app_state.try_borrow_mut() {
                     if let Err(e) = state.new_note() {
                         state.show_error(&format!("Failed to create new note: {}", e));
+                    }
+                }
+            }
+            "Save now" => {
+                if let Ok(mut state) = app_state.try_borrow_mut() {
+                    if let Some(timer_id) = state.save_timer.take() {
+                        timer_id.remove();
+                    }
+                    match state.save_current_document() {
+                        Ok(()) => {
+                            let name = state
+                                .document
+                                .path
+                                .as_deref()
+                                .map(Self::display_name)
+                                .unwrap_or_else(|| "note".to_string());
+                            state.show_message(&format!("Saved {}", name));
+                        }
+                        Err(e) => state.show_error(&format!("Failed to save: {}", e)),
                     }
                 }
             }
