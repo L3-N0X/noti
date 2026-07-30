@@ -1,7 +1,7 @@
 # Maintainer: L3-N0X <leon.goett@web.de>
 pkgname=noti-notes
 _binname=noti
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
 pkgdesc="Minimal, keyboard-first Markdown note editor for Linux/Hyprland"
 arch=('x86_64' 'aarch64')
